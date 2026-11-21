@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>دوز سه‌بعدی پیشرفته</title>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef1f7;--fg:#1c2233;--card:#fff;--line:#cdd3e2;--accent:#3b6df0;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12151f;--fg:#e8ebf5;--card:#1c2133;--line:#2e3550;--accent:#6c93ff}}
+:root[data-theme="dark"]{--bg:#12151f;--fg:#e8ebf5;--card:#1c2133;--line:#2e3550;--accent:#6c93ff}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:Vazirmatn,Tahoma,sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:0 10px 24px}
+h1{font-size:1.4rem;margin:16px 0 8px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+select,button,summary{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px;cursor:pointer}
+button.p{background:var(--accent);color:#fff;border-color:var(--accent)}
+#status{margin:12px 0 6px;font-weight:700;font-size:1.1rem;min-height:1.6em;text-align:center}
+#score{display:flex;gap:10px;margin-bottom:10px}
+.pc{display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;background:var(--card);border:2px solid var(--line);transition:.2s}
+.pc.on{border-color:var(--accent);transform:scale(1.06)}
+.pc i{width:14px;height:14px;border-radius:50%;display:block}
+#wrap{width:min(96vw,640px);aspect-ratio:1/1;touch-action:none;cursor:grab;border-radius:22px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.25);transition:background .3s}
+#wrap canvas{width:100%;height:100%;display:block}
+.hint{font-size:.8rem;opacity:.7;margin:6px 0 12px;text-align:center}
+.panel{width:min(96vw,640px);background:var(--card);border:1px solid var(--line);border-radius:16px;padding:10px 14px}
+.panel summary{border:0;padding:4px 0;font-weight:700}
+.panel h3{font-size:.9rem;margin:12px 0 6px;opacity:.85}
+.sw{display:flex;flex-wrap:wrap;gap:8px}
+.sw button{padding:6px 10px;font-size:.85rem;border-width:2px}
+.sw button.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.sw .bgb{min-width:84px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7);border-color:transparent}
+.row{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+.row label{display:flex;align-items:center;gap:6px;font-size:.9rem}
+input[type=color]{width:38px;height:30px;border:1px solid var(--line);border-radius:8px;padding:0;background:none;cursor:pointer}
+</style>
+</head>
+<body>
+<h1>🎲 دوز سه‌بعدی</h1>
+<div class="bar">
+  <select id="mode"><option value="ai">بازی با کامپیوتر</option><option value="pvp">دو نفره</option></select>
+  <select id="diff"><option value="easy">آسان</option><option value="mid">متوسط</option><option value="hard" selected>سخت</option></select>
+  <select id="start"><option value="X">اول: بازیکن ۱</option><option value="O">اول: بازیکن ۲</option><option value="alt">نوبتی</option></select>
+  <button class="p" id="reset">بازی جدید</button>
+  <button id="undo">↩ برگشت حرکت</button>
+  <button id="snd">🔊 صدا</button>
+</div>
+<div id="status"></div>
+<div id="score"></div>
+<div id="wrap"></div>
+<div class="hint">بکشید تا بچرخد • اسکرول برای زوم • روی خانه‌ها بزنید</div>
+<details class="panel" open>
+  <summary>🎨 شخصی‌سازی تم</summary>
+  <h3>پس‌زمینه</h3>
+  <div class="sw" id="bgs"></div>
+  <div class="row" style="margin-top:8px">
+    <label>رنگ دلخواه ۱ <input type="color" id="c1"></label>
+    <label>رنگ دلخواه ۲ <input type="color" id="c2"></label>
+  </div>
+  <h3>شکل مهره‌ها</h3>
+  <div class="sw" id="sets"></div>
+  <h3>رنگ مهره‌ها</h3>
+  <div class="row">
+    <label>بازیکن ۱ <input type="color" id="xc"></label>
+    <label>بازیکن ۲ <input type="color" id="oc"></label>
+  </div>
+</details>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const THEMES=[
+ {id:'space',n:'فضای شب',g:['#0b1026','#26357a'],tile:0x6f7fb8,base:0x1a2040,stars:1,amb:.6},
+ {id:'sunset',n:'غروب',g:['#ff9a5a','#7b2f8e'],tile:0xf3c6a5,base:0x5a2a4a,stars:0,amb:.75},
+ {id:'ocean',n:'اقیانوس',g:['#1aa0d8','#08284a'],tile:0x8fd3e8,base:0x0b3a5a,stars:0,amb:.7},
+ {id:'forest',n:'جنگل',g:['#3fa56b','#0f3b2a'],tile:0xa6d9a0,base:0x1d4a30,stars:0,amb:.7},
+ {id:'light',n:'روشن',g:['#f7f9fd','#d3dbef'],tile:0xffffff,base:0x9aa6c8,stars:0,amb:.85},
+ {id:'neon',n:'نئون',g:['#12002b','#5a0a7a'],tile:0x3a1a78,base:0x14082e,stars:1,amb:.55}
+];
+const SETS=[['classic','✕ ◯ کلاسیک'],['solid','▣ ● مکعب و کره'],['fun','★ ♥ ستاره و قلب'],['gem','◆ ▲ الماس و هرم']];
+let S={bg:'space',c1:'#1f4037',c2:'#99f2c8',set:'classic',xc:'#f0566b',oc:'#3fb5f0'};
+try{Object.assign(S,JSON.parse(localStorage.getItem('ttt3d')||'{}'))}catch(e){}
+const save=()=>{try{localStorage.setItem('ttt3d',JSON.stringify(S))}catch(e){}};
+
+// ---- sound (synthesized with WebAudio, no files)
+let AC;
+function tone(f,d=.12,type='sine',v=.18,delay=0,slide=0){
+  if(S.snd===false)return;
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state==='suspended')AC.resume();
+    const t=AC.currentTime+delay,o=AC.createOscillator(),g=AC.createGain();
+    o.type=type;o.frequency.setValueAtTime(f,t);
+    if(slide)o.frequency.exponentialRampToValueAtTime(slide,t+d);
+    g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(v,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+d);
+    o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+d+.02);
+  }catch(e){}
+}
+const SFX={
+  X:()=>tone(520,.12,'triangle',.2,0,780),
+  O:()=>tone(380,.14,'sine',.22,0,260),
+  win:()=>[523,659,784,1047].forEach((f,i)=>tone(f,.25,'triangle',.2,i*.12)),
+  lose:()=>[392,330,262,196].forEach((f,i)=>tone(f,.28,'sawtooth',.12,i*.14)),
+  draw:()=>{tone(330,.2,'square',.1);tone(330,.25,'square',.1,.22)},
+  undo:()=>tone(600,.12,'sine',.15,0,300),
+  reset:()=>{tone(440,.08,'triangle',.15);tone(660,.1,'triangle',.15,.09)},
+  bad:()=>tone(160,.12,'square',.1)
+};
+
+// ---- scene
+const wrap=$('wrap'),st=$('status');
+const scene=new THREE.Scene(),cam=new THREE.PerspectiveCamera(45,1,0.1,100);
+const ren=new THREE.WebGLRenderer({antialias:true,alpha:true});
+ren.setPixelRatio(Math.min(devicePixelRatio,2));wrap.appendChild(ren.domElement);
+const amb=new THREE.AmbientLight(0xffffff,.65);scene.add(amb);
+const dl=new THREE.DirectionalLight(0xffffff,.85);dl.position.set(4,9,5);scene.add(dl);
+const base=new THREE.Mesh(new THREE.BoxGeometry(6.8,.3,6.8),new THREE.MeshStandardMaterial({roughness:.6}));
+base.position.y=-.3;scene.add(base);
+const tileMat=new THREE.MeshStandardMaterial({roughness:.5}),hoverMat=new THREE.MeshStandardMaterial({roughness:.5});
+const winMat=new THREE.MeshStandardMaterial({color:0x4fd18b,emissive:0x1a6b45,roughness:.4});
+const xMat=new THREE.MeshStandardMaterial({roughness:.3,metalness:.2}),oMat=new THREE.MeshStandardMaterial({roughness:.3,metalness:.2});
+const tiles=[];
+for(let i=0;i<9;i++){const t=new THREE.Mesh(new THREE.BoxGeometry(1.9,.3,1.9),tileMat);t.position.set((i%3-1)*2.1,0,(Math.floor(i/3)-1)*2.1);t.userData.i=i;scene.add(t);tiles.push(t)}
+const sp=new Float32Array(900);
+for(let i=0;i<900;i+=3){const r=18+Math.random()*12,u=Math.random()*6.283,v=Math.acos(2*Math.random()-1);sp[i]=r*Math.sin(v)*Math.cos(u);sp[i+1]=r*Math.cos(v);sp[i+2]=r*Math.sin(v)*Math.sin(u)}
+const sg=new THREE.BufferGeometry();sg.setAttribute('position',new THREE.BufferAttribute(sp,3));
+const stars=new THREE.Points(sg,new THREE.PointsMaterial({color:0xffffff,size:.18}));scene.add(stars);
+
+// ---- themes
+const lum=h=>{const n=parseInt(h.slice(1),16);return(((n>>16)&255)*.299+((n>>8)&255)*.587+(n&255)*.114)/255};
+function applyTheme(){
+  let t=THEMES.find(x=>x.id===S.bg);
+  if(!t){const d=(lum(S.c1)+lum(S.c2))/2<.5;t={g:[S.c1,S.c2],tile:d?0x7585bd:0xe3e9f8,base:d?0x151a33:0x8f9bbd,stars:d,amb:d?.6:.85}}
+  wrap.style.background=`linear-gradient(160deg,${t.g[0]},${t.g[1]})`;
+  tileMat.color.setHex(t.tile);hoverMat.color.setHex(t.tile).offsetHSL(0,0,.12);
+  base.material.color.setHex(t.base);stars.visible=!!t.stars;amb.intensity=t.amb;
+  xMat.color.set(S.xc);oMat.color.set(S.oc);
+  ['c1','c2','xc','oc'].forEach(k=>$(k).value=S[k]);
+  renderUI();cards();
+}
+function renderUI(){
+  $('bgs').innerHTML=THEMES.map(t=>`<button class="bgb${S.bg===t.id?' on':''}" data-bg="${t.id}" style="background:linear-gradient(135deg,${t.g[0]},${t.g[1]})">${t.n}</button>`).join('')+
+   `<button class="bgb${S.bg==='custom'?' on':''}" data-bg="custom" style="background:linear-gradient(135deg,${S.c1},${S.c2})">دلخواه</button>`;
+  $('sets').innerHTML=SETS.map(s=>`<button class="${S.set===s[0]?'on':''}" data-set="${s[0]}">${s[1]}</button>`).join('');
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.bg){S.bg=b.dataset.bg;save();applyTheme()}
+  if(b.dataset.set){S.set=b.dataset.set;save();renderUI();rebuild()}
+});
+['c1','c2'].forEach(k=>$(k).oninput=e=>{S[k]=e.target.value;S.bg='custom';save();applyTheme()});
+['xc','oc'].forEach(k=>$(k).oninput=e=>{S[k]=e.target.value;save();applyTheme()});
+
+// ---- marks
+const G={};
+function ext(s,d){const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false});g.rotateX(-Math.PI/2);return g}
+G.heart=(()=>{const s=new THREE.Shape();s.moveTo(0,-.7);s.bezierCurveTo(-1.1,.1,-.5,.9,0,.35);s.bezierCurveTo(.5,.9,1.1,.1,0,-.7);return ext(s,.4)})();
+G.star=(()=>{const s=new THREE.Shape();for(let k=0;k<10;k++){const r=k%2?.38:.85,a=Math.PI/2+k*Math.PI/5,x=Math.cos(a)*r,y=Math.sin(a)*r;k?s.lineTo(x,y):s.moveTo(x,y)}s.closePath();return ext(s,.4)})();
+function mkMark(p){
+  const g=new THREE.Group(),m=p==='X'?xMat:oMat,add=(geo,y,ry)=>{const o=new THREE.Mesh(geo,m);o.position.y=y;if(ry)o.rotation.y=ry;g.add(o);return o};
+  const X=p==='X';
+  if(S.set==='classic'){
+    if(X){add(new THREE.BoxGeometry(.28,.5,1.5),.25,Math.PI/4);add(new THREE.BoxGeometry(.28,.5,1.5),.25,-Math.PI/4)}
+    else{add(new THREE.TorusGeometry(.58,.17,16,40),.2).rotation.x=Math.PI/2}
+  }else if(S.set==='solid'){X?add(new THREE.BoxGeometry(1.1,1.1,1.1),.55):add(new THREE.SphereGeometry(.65,32,24),.65)}
+  else if(S.set==='fun'){add(X?G.star:G.heart,0)}
+  else{X?add(new THREE.OctahedronGeometry(.75),.75):add(new THREE.ConeGeometry(.8,1.2,4),.6,Math.PI/4)}
+  return g;
+}
+function addMark(i,p,anim){
+  const g=mkMark(p);g.position.set(tiles[i].position.x,.15,tiles[i].position.z);
+  g.userData.t=anim?0:1;g.scale.setScalar(anim?.01:1);scene.add(g);markObjs[i]=g;
+}
+function rebuild(){for(let i=0;i<9;i++){if(markObjs[i])scene.remove(markObjs[i]);markObjs[i]=null;if(board[i])addMark(i,board[i],false)}}
+
+// ---- game logic
+const L=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+let board,turn,over,busy,gid=0,history,winLine,winnerP,altNext='X',scores={X:0,O:0};const markObjs=[];
+const mode=()=>$('mode').value;
+function winner(b){for(const l of L)if(b[l[0]]&&b[l[0]]===b[l[1]]&&b[l[0]]===b[l[2]])return{p:b[l[0]],l};return b.every(Boolean)?{p:'draw'}:null}
+function minimax(b,p,me){
+  const w=winner(b);if(w)return w.p==='draw'?0:(w.p===me?10:-10);
+  const s=[];for(let i=0;i<9;i++)if(!b[i]){b[i]=p;s.push(minimax(b,p==='X'?'O':'X',me));b[i]=null}
+  return p===me?Math.max(...s):Math.min(...s);
+}
+function bestMove(b,me){
+  let bs=-99,mv=[];
+  for(let i=0;i<9;i++)if(!b[i]){b[i]=me;const s=minimax(b,me==='X'?'O':'X',me);b[i]=null;if(s>bs){bs=s;mv=[i]}else if(s===bs)mv.push(i)}
+  return mv[Math.floor(Math.random()*mv.length)];
+}
+function aiMove(){
+  const free=[...Array(9).keys()].filter(i=>!board[i]),d=$('diff').value;
+  return (d==='easy'||(d==='mid'&&Math.random()<.5))?free[Math.floor(Math.random()*free.length)]:bestMove(board.slice(),'O');
+}
+function cards(){
+  const ai=mode()==='ai';
+  $('score').innerHTML=[['X',ai?'شما':'بازیکن ۱',S.xc],['O',ai?'کامپیوتر':'بازیکن ۲',S.oc]].map(([p,n,c])=>
+   `<div class="pc${turn===p&&!over?' on':''}"><i style="background:${c}"></i><span>${n}</span><b>${scores[p]}</b></div>`).join('');
+}
+function showTurn(){
+  const ai=mode()==='ai';
+  st.textContent=ai?(turn==='X'?'نوبت شماست':'کامپیوتر در حال فکر کردن…'):(turn==='X'?'نوبت بازیکن ۱':'نوبت بازیکن ۲');
+  cards();
+}
+function place(i,p){
+  board[i]=p;history.push(i);addMark(i,p,true);SFX[p]();
+  const w=winner(board);
+  if(w){
+    over=true;
+    if(w.p==='draw'){winnerP=null;st.textContent='مساوی شد! 🤝';setTimeout(SFX.draw,300)}
+    else{
+      winLine=w.l;winnerP=w.p;w.l.forEach(k=>tiles[k].material=winMat);scores[w.p]++;setTimeout(mode()==='ai'&&w.p==='O'?SFX.lose:SFX.win,300);
+      st.textContent=mode()==='ai'?(w.p==='X'?'شما بردید! 🎉':'کامپیوتر برد!'):(w.p==='X'?'بازیکن ۱ برنده شد! 🎉':'بازیکن ۲ برنده شد! 🎉');
+    }
+    cards();
+  }else{turn=p==='X'?'O':'X';showTurn()}
+}
+function aiMaybe(){
+  if(mode()!=='ai'||turn!=='O'||over)return;
+  busy=true;const g=gid;
+  setTimeout(()=>{if(g!==gid)return;busy=false;if(!over&&turn==='O')place(aiMove(),'O')},550);
+}
+function play(i){
+  if(over||busy)return;
+  if(board[i]){SFX.bad();return}
+  if(mode()==='ai'&&turn!=='X')return;
+  place(i,turn);aiMaybe();
+}
+function reset(){
+  gid++;markObjs.forEach((m,i)=>{if(m)scene.remove(m);markObjs[i]=null});
+  tiles.forEach(t=>t.material=tileMat);
+  board=Array(9).fill(null);history=[];over=false;busy=false;winLine=null;winnerP=null;
+  const s=$('start').value;
+  if(s==='alt'){turn=altNext;altNext=altNext==='X'?'O':'X'}else turn=s;
+  $('diff').style.display=mode()==='ai'?'':'none';
+  showTurn();aiMaybe();
+}
+function undo(){
+  if(busy||!history.length)return;
+  gid++;
+  if(over&&winnerP)scores[winnerP]--;
+  over=false;winLine=null;winnerP=null;tiles.forEach(t=>t.material=tileMat);
+  let p;
+  do{const i=history.pop();p=board[i];board[i]=null;scene.remove(markObjs[i]);markObjs[i]=null}while(mode()==='ai'&&p==='O'&&history.length);
+  turn=p;showTurn();aiMaybe();
+}
+$('reset').onclick=()=>{SFX.reset();reset()};$('undo').onclick=()=>{SFX.undo();undo()};
+const sb=$('snd'),sbUp=()=>sb.textContent=S.snd===false?'🔇 بی‌صدا':'🔊 صدا';
+sb.onclick=()=>{S.snd=S.snd===false;save();sbUp();SFX.reset()};sbUp();
+$('mode').onchange=()=>{scores={X:0,O:0};reset()};
+$('start').onchange=()=>{altNext='X';reset()};
+
+// ---- camera & input
+let th=.6,ph=.95,rad=11,drag=null,moved=0;
+const ray=new THREE.Raycaster(),mp=new THREE.Vector2();
+function pick(e){
+  const r=ren.domElement.getBoundingClientRect();
+  mp.set((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height)*2+1);
+  ray.setFromCamera(mp,cam);const h=ray.intersectObjects(tiles)[0];return h?h.object.userData.i:-1;
+}
+wrap.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY};moved=0;wrap.setPointerCapture(e.pointerId);wrap.style.cursor='grabbing'});
+wrap.addEventListener('pointermove',e=>{
+  if(drag){
+    const dx=e.clientX-drag.x,dy=e.clientY-drag.y;moved+=Math.abs(dx)+Math.abs(dy);
+    th-=dx*.008;ph=Math.min(1.45,Math.max(.25,ph-dy*.008));drag={x:e.clientX,y:e.clientY};
+  }else{
+    const i=pick(e);
+    tiles.forEach((t,k)=>{if(!(winLine&&winLine.includes(k)))t.material=(k===i&&!board[k]&&!over)?hoverMat:tileMat});
+  }
+});
+wrap.addEventListener('pointerup',e=>{wrap.style.cursor='grab';if(drag&&moved<6){const i=pick(e);if(i>=0)play(i)}drag=null});
+wrap.addEventListener('wheel',e=>{e.preventDefault();rad=Math.min(18,Math.max(7,rad+e.deltaY*.01))},{passive:false});
+function resize(){const s=wrap.clientWidth;ren.setSize(s,s,false)}
+addEventListener('resize',resize);
+
+function loop(time){
+  requestAnimationFrame(loop);
+  markObjs.forEach((m,i)=>{
+    if(!m)return;
+    if(m.userData.t<1){m.userData.t=Math.min(1,m.userData.t+.06);m.scale.setScalar(1-Math.pow(1-m.userData.t,3))}
+    else m.scale.setScalar(winLine&&winLine.includes(i)?1+.14*Math.sin(time/130):1);
+    if(S.set!=='classic')m.rotation.y+=.012;
+  });
+  stars.rotation.y+=.0006;
+  cam.position.set(rad*Math.sin(ph)*Math.sin(th),rad*Math.cos(ph),rad*Math.sin(ph)*Math.cos(th));
+  cam.lookAt(0,0,0);ren.render(scene,cam);
+}
+resize();reset();applyTheme();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
